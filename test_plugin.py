@@ -229,6 +229,7 @@ class PluginTest(unittest.TestCase):
         self.assertEqual("Prince-of-Persia_DOS_EN_v11.zip", download["fileName"])
         self.assertEqual({"Referer": GAME, "Cookie": "PHPSESSID=abc123def"}, download["headers"])
         self.assertEqual(355000, download["size"])
+        self.assertEqual("archive", download["unpack"], "a zip is unpacked by droidtop into a folder")
         self.assertEqual("dos", reply["values"]["system"])
         self.assertNotIn("engine", reply["values"], "droidtop's engine list has no DOS entry")
 
@@ -243,7 +244,9 @@ class PluginTest(unittest.TestCase):
         answers[("HEAD", FILE)] = page("<html>", url=GAME, headers={"content-type": "text/html"})
         reply = job("acquire", ref={"site": "ma", "slug": "prince-of-persia-pd"}, values={"file": "/download/m4og-prince-of-persia"})
         self.assertTrue(reply["ok"], reply)
-        self.assertEqual("P.zip", json.loads(reply["values"]["download"])["fileName"])
+        captured = json.loads(reply["values"]["download"])
+        self.assertEqual("P.zip", captured["fileName"])
+        self.assertNotIn("unpack", captured, "a captured download is passed on as droidtop made it")
 
     def test_an_internet_archive_download_names_its_file_and_system(self):
         meta = {"result": {"title": "Pro Race Demo", "collection": ["softwarelibrary_msdos_games", "softwarelibrary_msdos"]}}
@@ -253,7 +256,8 @@ class PluginTest(unittest.TestCase):
         reply = job("acquire", ref={"site": "ia", "id": "msdos_Pro_Race_1999"}, values={"file": "Pro Race.zip"})
         download = json.loads(reply["values"]["download"])
         self.assertEqual("https://archive.org/download/msdos_Pro_Race_1999/Pro%20Race.zip", download["url"])
-        self.assertEqual("Pro_Race.zip", download["fileName"])
+        self.assertEqual("Pro Race.zip", download["fileName"], "kept as the source names it")
+        self.assertEqual("archive", download["unpack"])
         self.assertEqual(2048, download["size"])
         self.assertEqual("dos", reply["values"]["system"])
 

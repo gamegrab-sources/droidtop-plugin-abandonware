@@ -26,9 +26,9 @@ files from `metadata/<item>/metadata` and `/files`, download from `archive.org/d
 
 ## What it tells droidtop with a download
 
-`download` as the acquire reply defines it, and `system`: droidtop's id for the game's system (`dos`, `windows`,
-`macintosh`, `amiga`, ...). The engine hint (`engine`) only names Enginehost engines, which have no DOS or Windows entry,
-so this plugin does not set it; `system` is what a placement step can use (see the issues filed on Droidtop/tracker).
+`download` as the acquire reply defines it, with `unpack: "archive"` for a zip, 7z or rar, and `system`: droidtop's id for
+the game's system (`dos`, `windows`, `macintosh`, `amiga`, ...), by which droidtop places the game (Droidtop/tracker#417). The
+engine hint (`engine`) only names Enginehost engines, so this plugin does not set it.
 
 ## Layout
 

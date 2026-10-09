@@ -3,7 +3,7 @@
   "origin": "gamegrab",
   "label": "Abandonware",
   "description": "Unofficial plugin from gamegrab-sources, not part of droidtop and not affiliated with MyAbandonware or the Internet Archive. Searches MyAbandonware and the Internet Archive's software library and downloads the game you pick for DOS, Windows and other old systems.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "python",
   "contractVersion": 2,
   "requestsRoot": false,

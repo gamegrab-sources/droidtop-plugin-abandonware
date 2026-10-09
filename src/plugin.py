@@ -203,10 +203,21 @@ def _is_challenge(body):
     return "jschl-title" in head or "<title>Please wait" in head or "Cake Test" in head
 
 
+ARCHIVE_NAME = re.compile(r"\.(zip|7z|rar)$", re.I)
+
+
 def _file_name(raw, fallback):
+    """The name as the source gives it (droidtop keeps spaces and accents); only what no file system takes is replaced."""
     name = urllib.parse.unquote(raw or "").rsplit("/", 1)[-1].strip()
-    name = re.sub(r"[^A-Za-z0-9._-]", "_", name).lstrip("._-")
-    return name if SAFE_NAME.match(name) else fallback
+    name = re.sub(r'[:*?"<>|\x00-\x1f\\]', "_", name).lstrip(".")
+    return name[:180] if name else fallback
+
+
+def _unpacking(download):
+    """A zip, 7z or rar is unpacked by droidtop into a folder of its own as the last step of the same job."""
+    if ARCHIVE_NAME.search(download.get("fileName", "")):
+        download["unpack"] = "archive"
+    return download
 
 
 # ----------------------------------------------------------------------------------------------- MyAbandonware
@@ -615,7 +626,7 @@ def _acquire_ma(args):
     if status == 200 and final != url and "html" not in kind:
         disposition = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)', str(answer.get("content-disposition", "")))
         name = _file_name(disposition.group(1) if disposition else urllib.parse.urlsplit(final).path, fallback)
-        download = {"url": url, "headers": sent, "fileName": name}
+        download = _unpacking({"url": url, "headers": sent, "fileName": name})
         length = str(answer.get("content-length", ""))
         if length.isdigit() and int(length) > 0:
             download["size"] = int(length)
@@ -633,6 +644,8 @@ def _acquire_ma(args):
 
 
 def _done_ma(game, download, system):
+    if "session" not in download:
+        _unpacking(download)
     values = {"message": "Downloading " + (game["title"] or "the game"), "download": json.dumps(download)}
     if system:
         values["system"] = system
@@ -653,10 +666,12 @@ def _acquire_ia(args):
             chosen = file
     if chosen is None:
         return {"ok": False, "error": "Choose which file first"}
-    download = {
-        "url": IA_DOWNLOAD + urllib.parse.quote(identifier) + "/" + urllib.parse.quote(chosen["name"]),
-        "fileName": _file_name(chosen["name"], identifier + ".zip"),
-    }
+    download = _unpacking(
+        {
+            "url": IA_DOWNLOAD + urllib.parse.quote(identifier) + "/" + urllib.parse.quote(chosen["name"]),
+            "fileName": _file_name(chosen["name"], identifier + ".zip"),
+        }
+    )
     if chosen["size"] > 0:
         download["size"] = chosen["size"]
     collection = meta.get("collection")
