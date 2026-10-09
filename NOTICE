@@ -1,0 +1,5 @@
+droidtop-plugin-abandonware (gamegrab-sources), GPL-3.0.
+
+Reads MyAbandonware (https://www.myabandonware.com) and the Internet Archive (https://archive.org). Not affiliated with
+either. The files in fixtures/ are short excerpts of MyAbandonware's public pages, kept so the parser can be tested;
+they remain the site's.

@@ -1,0 +1,48 @@
+{
+  "id": "gamegrab.abandonware",
+  "origin": "gamegrab",
+  "label": "Abandonware",
+  "description": "Unofficial plugin from gamegrab-sources, not part of droidtop and not affiliated with MyAbandonware or the Internet Archive. Searches MyAbandonware and the Internet Archive's software library and downloads the game you pick for DOS, Windows and other old systems.",
+  "version": "0.1.0",
+  "kind": "python",
+  "contractVersion": 2,
+  "requestsRoot": false,
+  "abis": [],
+  "provides": [
+    {
+      "point": "library.sources",
+      "version": 1,
+      "id": "abandonware",
+      "label": "Abandonware"
+    },
+    {
+      "point": "ui.settings",
+      "version": 1,
+      "id": "main",
+      "target": "plugin"
+    }
+  ],
+  "permissions": [
+    {
+      "id": "net.domains",
+      "domains": [
+        "www.myabandonware.com",
+        "*.myabandonware.com",
+        "archive.org",
+        "*.archive.org"
+      ],
+      "reason": "Searches MyAbandonware and the Internet Archive, reads a game's page and asks where its file is before it is downloaded"
+    },
+    {
+      "id": "web.session",
+      "domains": [
+        "myabandonware.com"
+      ],
+      "reason": "MyAbandonware checks that a visitor is a browser. This opens the site in droidtop's own browser view, where you pass that check yourself, and uses that session for the plugin's requests to the site"
+    },
+    {
+      "id": "library.folders.write",
+      "reason": "A game you choose to download is placed in the folder droidtop gives it"
+    }
+  ]
+}
