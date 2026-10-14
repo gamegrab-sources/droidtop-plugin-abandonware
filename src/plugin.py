@@ -37,7 +37,9 @@ IA_DOWNLOAD = "https://archive.org/download/"
 LOGIN_URL = MA + "/"
 
 STATE_FILE = "settings.json"
-CHUNK = 120 * 1024
+# data.read answers in base64 inside a JSON string, which crosses droidtop's broker as UTF-16: 120 KiB
+# came back as 320 KB binder replies (logcat, BlueStacks, 2026-10-14). 48 KiB keeps a reply near 128 KB.
+CHUNK = 48 * 1024
 DEFAULT_COLLECTIONS = ["softwarelibrary_msdos_games", "softwarelibrary_win3"]
 IA_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -123,9 +125,25 @@ def _data(api, op, args):
     return reply.get("data") or {}
 
 
+def _http_error(site, status):
+    """A site's HTTP failure in plain words (the line droidtop shows under the source)."""
+    if status in (401, 403):
+        return "%s refused the request. Try again later." % site
+    if status in (404, 410):
+        return "%s no longer has that page." % site
+    if status == 429:
+        return "%s asks to slow down. Try again in a minute." % site
+    if status >= 500 or status == 0:
+        return "%s is not answering right now. Try again later." % site
+    return "%s sent an error (%d). Try again later." % (site, status)
+
+
+UNREADABLE_IA = "The Internet Archive sent a page this plugin could not read. Try again later."
+
+
 def _signed_in():
     try:
-        return bool(_data("web.session", "status", {}).get("signedIn"))
+        return bool(_data("web.session", "get_status", {}).get("signedIn"))
     except HostError:
         return False
 
@@ -134,7 +152,7 @@ def _fetch(url, method="GET", headers=None, session=None):
     """(status, final url, headers, body). With a browser-view session when there is one, else a plain request."""
     use_session = _signed_in() if session is None else session
     args = {"url": url, "method": method, "headers": headers or {}, "as": "text", "timeoutMs": 25000}
-    data = _data("web.session" if use_session else "net", "fetch" if use_session else "http", args)
+    data = _data("web.session" if use_session else "net", "fetch" if use_session else "request", args)
     return int(data.get("status") or 0), data.get("url") or url, data.get("headers") or {}, data.get("body") or ""
 
 
@@ -293,7 +311,7 @@ def _ma_search(query, context_system):
     if _is_challenge(body):
         raise Challenge()
     if status != 200:
-        raise HostError("FAILED", "MyAbandonware answered %d" % status)
+        raise HostError("FAILED", _http_error("MyAbandonware", status))
     results = []
     for card in parse_cards(body):
         if not _wanted_platform(card["platforms"], context_system):
@@ -320,9 +338,9 @@ def _ma_game(slug):
     if _is_challenge(body):
         raise Challenge()
     if status == 404:
-        raise HostError("NOT_FOUND", "MyAbandonware no longer has that game")
+        raise HostError("NOT_FOUND", "MyAbandonware no longer has that game.")
     if status != 200:
-        raise HostError("FAILED", "MyAbandonware answered %d" % status)
+        raise HostError("FAILED", _http_error("MyAbandonware", status))
     return parse_game(body), headers
 
 
@@ -354,11 +372,11 @@ def _ia_search(query, state, context_system):
     ]
     status, _final, _headers, body = _fetch(IA_SEARCH + "?" + urllib.parse.urlencode(params), session=False)
     if status != 200:
-        raise HostError("FAILED", "The Internet Archive answered %d" % status)
+        raise HostError("FAILED", _http_error("The Internet Archive", status))
     try:
         docs = (json.loads(body).get("response") or {}).get("docs") or []
     except ValueError:
-        raise HostError("FAILED", "The Internet Archive answered with something unexpected")
+        raise HostError("FAILED", UNREADABLE_IA)
     results = []
     for doc in docs:
         identifier = doc.get("identifier")
@@ -384,18 +402,18 @@ def _ia_item(identifier):
         raise HostError("INVALID_ARGS", "Missing item")
     status, _f, _h, body = _fetch(IA_META + urllib.parse.quote(identifier) + "/metadata", session=False)
     if status != 200:
-        raise HostError("NOT_FOUND" if status == 404 else "FAILED", "The Internet Archive answered %d" % status)
+        raise HostError("NOT_FOUND" if status == 404 else "FAILED", _http_error("The Internet Archive", status))
     try:
         meta = json.loads(body).get("result") or {}
     except ValueError:
-        raise HostError("FAILED", "The Internet Archive answered with something unexpected")
+        raise HostError("FAILED", UNREADABLE_IA)
     status, _f, _h, body = _fetch(IA_META + urllib.parse.quote(identifier) + "/files", session=False)
     if status != 200:
-        raise HostError("FAILED", "The Internet Archive answered %d for its files" % status)
+        raise HostError("FAILED", _http_error("The Internet Archive", status))
     try:
         rows = json.loads(body).get("result") or []
     except ValueError:
-        raise HostError("FAILED", "The Internet Archive answered with something unexpected")
+        raise HostError("FAILED", UNREADABLE_IA)
     files = []
     for row in rows:
         name = row.get("name") if isinstance(row, dict) else None
@@ -424,10 +442,7 @@ def _info(item_id, title, value=None, subtitle=None):
     return node
 
 
-CHALLENGE_TEXT = (
-    "MyAbandonware is asking this device to prove it is a browser. Open this plugin's Settings, choose "
-    "\"Open MyAbandonware\", let the page finish, press Done, then try again."
-)
+CHALLENGE_TEXT = "MyAbandonware wants a browser check. Open MyAbandonware in this plugin's Settings once, then try again."
 
 
 def _form():
@@ -539,29 +554,18 @@ def _detail(args):
 def _settings_view(state):
     signed = _signed_in()
     rows = [
-        _info(
-            "about",
-            "Abandonware",
-            None,
-            "Unofficial plugin from gamegrab-sources. Searches MyAbandonware and the Internet Archive's software library; droidtop downloads what you pick. Check that a game is abandonware where you live.",
-        ),
         {"type": "toggle", "id": "ma", "title": "MyAbandonware", "value": state["ma"], "action": {"kind": "call", "op": "setSite"}},
         {"type": "toggle", "id": "ia", "title": "Internet Archive", "value": state["ia"], "action": {"kind": "call", "op": "setSite"}},
         {
             "type": "text",
             "id": "collections",
             "title": "Internet Archive collections",
-            "subtitle": "Names, separated by commas. MS-DOS Games and Windows 3.x are the defaults.",
+            "subtitle": "Separate names with commas.",
             "value": ", ".join(state["collections"]),
             "action": {"kind": "call", "op": "setCollections"},
         },
-        _info(
-            "browser",
-            "MyAbandonware browser check",
-            "Passed" if signed else "Not opened",
-            "MyAbandonware checks that a visitor is a browser. droidtop's own browser view passes it the way any browser does; this plugin never tries to.",
-        ),
-        {"type": "button", "id": "open", "title": "Open MyAbandonware", "subtitle": "Opens the site in droidtop's browser view; press Done when the page has loaded", "action": {"kind": "job", "op": "openSite", "title": "Open MyAbandonware"}},
+        _info("browser", "MyAbandonware browser check", "Passed" if signed else "Not passed yet"),
+        {"type": "button", "id": "open", "title": "Open MyAbandonware", "subtitle": "Press Done once the page has loaded.", "action": {"kind": "job", "op": "openSite", "title": "Open MyAbandonware"}},
     ]
     if signed:
         rows.append({"type": "button", "id": "clear", "title": "Forget the browser session", "action": {"kind": "call", "op": "clearSession"}})
@@ -639,8 +643,8 @@ def _acquire_ma(args):
             return {"ok": False, "error": error.message}
         if data.get("captured") and isinstance(data.get("download"), dict):
             return _done_ma(game, data["download"], system)
-        return {"ok": False, "error": "No download was started"}
-    return {"ok": False, "error": "MyAbandonware did not give the file to a plain request. " + CHALLENGE_TEXT}
+        return {"ok": False, "error": "That page started no download."}
+    return {"ok": False, "error": CHALLENGE_TEXT}
 
 
 def _done_ma(game, download, system):
@@ -689,7 +693,7 @@ def _open_site():
         done = _data("web.session", "sign_in", {"url": LOGIN_URL}).get("signedIn")
     except HostError as error:
         return {"ok": False, "error": error.message}
-    return {"ok": True, "values": {"message": "MyAbandonware opened in the browser view" if done else "The browser view was closed before the page finished"}}
+    return {"ok": True, "values": {"message": "Browser check passed" if done else "Closed before the page finished"}}
 
 
 # --------------------------------------------------------------------------------------------- entry points

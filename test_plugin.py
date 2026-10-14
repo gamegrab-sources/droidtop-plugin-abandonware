@@ -39,9 +39,9 @@ def fake_call(api, op, args=None, version=1):
         raw = store[args["name"]]
         part = raw[args["offset"] : args["offset"] + args["length"]]
         return {"ok": True, "data": {"base64": base64.b64encode(part).decode("ascii"), "eof": args["offset"] + len(part) >= len(raw)}}
-    if api == "web.session" and op == "status":
+    if api == "web.session" and op == "get_status":
         return {"ok": True, "data": {"signedIn": session["signedIn"]}}
-    if api in ("net", "web.session") and op in ("http", "fetch"):
+    if api in ("net", "web.session") and op in ("request", "fetch"):
         key = (args["method"], args["url"])
         for prefixed in [k for k in answers if k[0] == args["method"] and k[1].endswith("*") and args["url"].startswith(k[1][:-1])]:
             key = prefixed
@@ -164,13 +164,13 @@ class PluginTest(unittest.TestCase):
         self.assertEqual("FAILED", reply["error"]["code"])
         self.assertIn("Open MyAbandonware", reply["error"]["message"])
         # One request, no retry, nothing but the page asked for.
-        self.assertEqual(1, len([c for c in calls if c[1] in ("http", "fetch")]))
+        self.assertEqual(1, len([c for c in calls if c[1] in ("request", "fetch")]))
 
     def test_with_the_browser_session_the_request_goes_through_it(self):
         session["signedIn"] = True
         answers[("GET", SEARCH)] = page(fixture("ma_cards.html"))
         send("library.sources", "search", query="pro race", values={"site": "ma"})
-        self.assertEqual("web.session", [c for c in calls if c[1] in ("http", "fetch")][0][0])
+        self.assertEqual("web.session", [c for c in calls if c[1] in ("request", "fetch")][0][0])
 
     def test_nothing_typed_is_nothing_found_and_a_site_can_be_off(self):
         self.assertEqual([], send("library.sources", "search", query="  ", values={})["data"]["results"])
@@ -266,7 +266,7 @@ class PluginTest(unittest.TestCase):
     def test_settings_view_and_the_actions_it_names(self):
         view = send("ui.settings", "view")["data"]
         ids = [r["id"] for r in items(view)]
-        self.assertEqual(["about", "ma", "ia", "collections", "browser", "open"], ids)
+        self.assertEqual(["ma", "ia", "collections", "browser", "open"], ids)
         self.assertTrue(send("ui.settings", "setCollections", values={"collections": "https://archive.org/details/softwarelibrary_win95, bad!"})["ok"])
         self.assertEqual(["softwarelibrary_win95"], plugin._state()["collections"])
         self.assertTrue(send("ui.settings", "setCollections", values={"collections": ""})["ok"])
