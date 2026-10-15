@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Declares the systems it serves (DOS, Windows 3.x and Windows), so droidtop lists it under those and in PC searches, not under every console.
+  Needs a droidtop that reads `systems` on `library.sources` (docs/plugin-api.md 1.6); an older
+  droidtop ignores the field and lists the source everywhere, as before.
+
 ## 0.3.0
 
 - Failures in plain words ("MyAbandonware is not answering right now")
