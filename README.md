@@ -39,3 +39,9 @@ engine hint (`engine`) only names Enginehost engines, so this plugin does not se
 - `python3 test_plugin.py` runs the tests.
 
 Licence: GPL-3.0.
+
+## Signing
+
+The bundle carries `manifest.jws`: a detached ES256 JWS over the exact bytes of `manifest.json`, with this repository's leaf certificate in `x5c` (the root itself is not included). The leaf comes from the repository secrets `PLUGIN_SIGNING_KEY` and `PLUGIN_SIGNING_CERT` and was issued by the gamegrab root, a third-party anchor that people choose to trust (it is not pinned by the droidtop app); it names the plugin's origin and id. `sign_jws.py` writes the signature and checks it against the leaf before packing. `manifest.sig` stays in the bundle for older droidtop builds. Expiry dates are not checked.
+
+`droidtop-plugin-key.json` in the repository root carries the gamegrab root certificate; droidtop reads it to anchor the `gamegrab` origin at that root.
