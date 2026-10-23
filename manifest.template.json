@@ -3,7 +3,7 @@
   "origin": "gamegrab",
   "label": "Abandonware",
   "description": "Searches MyAbandonware and the Internet Archive for old DOS and Windows games and downloads the one you pick.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "kind": "python",
   "contractVersion": 3,
   "category": "sources",
