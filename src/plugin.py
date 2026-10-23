@@ -551,39 +551,54 @@ def _detail(args):
     return _error("NOT_FOUND", "That result is not one this plugin knows")
 
 
-def _settings_view(state):
+SETTINGS_TARGET = "settings.page"
+
+
+def _facet(fid, kind, label, **fields):
+    facet = {"id": fid, "kind": kind, "v": 1, "targets": [SETTINGS_TARGET], "label": label}
+    facet.update({k: v for k, v in fields.items() if v is not None})
+    return facet
+
+
+def _settings_facets(state):
+    """The settings page (droidtop plugin-api 1.10, ui.facets target settings.page)."""
     signed = _signed_in()
-    rows = [
-        {"type": "toggle", "id": "ma", "title": "MyAbandonware", "value": state["ma"], "action": {"kind": "call", "op": "setSite"}},
-        {"type": "toggle", "id": "ia", "title": "Internet Archive", "value": state["ia"], "action": {"kind": "call", "op": "setSite"}},
-        {
-            "type": "text",
-            "id": "collections",
-            "title": "Internet Archive collections",
-            "subtitle": "Separate names with commas.",
-            "value": ", ".join(state["collections"]),
-            "action": {"kind": "call", "op": "setCollections"},
-        },
-        _info("browser", "MyAbandonware browser check", "Passed" if signed else "Not passed yet"),
-        {"type": "button", "id": "open", "title": "Open MyAbandonware", "subtitle": "Press Done once the page has loaded.", "action": {"kind": "job", "op": "openSite", "title": "Open MyAbandonware"}},
+    facets = [
+        _facet("ma", "toggle", "MyAbandonware", value=state["ma"], call={"op": "setSite", "args": {"site": "ma"}}),
+        _facet("ia", "toggle", "Internet Archive", value=state["ia"], call={"op": "setSite", "args": {"site": "ia"}}),
+        _facet("collections", "input", "Internet Archive collections", hint="Separate names with commas.", value=", ".join(state["collections"]), call={"op": "setCollections"}),
+        _facet("browser", "status", "MyAbandonware browser check", state="ok" if signed else "off", value="Passed" if signed else "Not passed yet"),
+        _facet("open", "action", "Open MyAbandonware", sub="Press Done once the page has loaded.", call={"op": "openSite", "kind": "job"}),
     ]
     if signed:
-        rows.append({"type": "button", "id": "clear", "title": "Forget the browser session", "action": {"kind": "call", "op": "clearSession"}})
-    return _view("Abandonware", rows)
+        facets.append(_facet("clear", "action", "Forget the browser session", confirm="confirm", call={"op": "clearSession"}))
+    return {"facets": facets}
+
+
+def _value(args, key):
+    """A facet's committed value (`value`, droidtop plugin-api 1.10), or the view's value an older droidtop sends."""
+    if "value" in args:
+        return args["value"]
+    return (args.get("values") or {}).get(key)
 
 
 def _set_site(args):
-    values = args.get("values") or {}
     state = _state()
-    for key in ("ma", "ia"):
-        if key in values:
-            state[key] = str(values[key]).lower() == "true"
+    site = args.get("site")
+    if site in ("ma", "ia"):
+        value = _value(args, site)
+        state[site] = value is True or str(value).lower() == "true"
+    else:
+        values = args.get("values") or {}
+        for key in ("ma", "ia"):
+            if key in values:
+                state[key] = str(values[key]).lower() == "true"
     _write_json(STATE_FILE, state)
     return _ok({"message": "Saved"})
 
 
 def _set_collections(args):
-    text = str((args.get("values") or {}).get("collections") or "")
+    text = str(_value(args, "collections") or "")
     chosen = []
     for part in re.split(r"[,\s]+", text):
         match = re.search(r"archive\.org/details/([^/?#]+)", part)
@@ -715,9 +730,9 @@ def handle(call_json):
                 return _search(args)
             if op == "detail":
                 return _detail(args)
-        elif point == "ui.settings":
-            if op == "view":
-                return _ok(_settings_view(_state()))
+        elif point == "ui.facets":
+            if op == "get":
+                return _ok(_settings_facets(_state()) if args.get("target") == SETTINGS_TARGET else {"facets": []})
             if op == "setSite":
                 return _set_site(args)
             if op == "setCollections":
@@ -752,7 +767,7 @@ def start_job(job_id, call, progress):
             if ref.get("site") == "ia":
                 return json.dumps(_acquire_ia(args))
             return json.dumps({"ok": False, "error": "That result is not one this plugin knows"})
-        if point == "ui.settings" and op == "openSite":
+        if point == "ui.facets" and op == "openSite":
             return json.dumps(_open_site())
     except HostError as error:
         return json.dumps({"ok": False, "error": error.message})

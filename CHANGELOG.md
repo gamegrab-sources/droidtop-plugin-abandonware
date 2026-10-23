@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- The settings are `settings.page` facets (droidtop docs/plugin-api.md 1.10) in place of the `ui.settings` view: the
+  two site switches, the Internet Archive collections, the browser check's state, Open MyAbandonware and, once
+  passed, Forget the browser session. Each switch and the collections are saved as they are committed, from
+  droidtop's `value`.
+
 ## 0.3.2
 
 - Names its kind for droidtop's Plugins page (`category`, docs/plugin-api.md 1.2, Droidtop/tracker#179).

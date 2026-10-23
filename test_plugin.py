@@ -174,7 +174,8 @@ class PluginTest(unittest.TestCase):
 
     def test_nothing_typed_is_nothing_found_and_a_site_can_be_off(self):
         self.assertEqual([], send("library.sources", "search", query="  ", values={})["data"]["results"])
-        send("ui.settings", "setSite", values={"ma": "false", "ia": "false"})
+        send("ui.facets", "setSite", site="ma", value=False)
+        send("ui.facets", "setSite", site="ia", value=False)
         self.assertEqual([], send("library.sources", "search", query="x", values={})["data"]["results"])
 
     # ---------------------------------------------------------------- detail
@@ -263,22 +264,23 @@ class PluginTest(unittest.TestCase):
 
     # -------------------------------------------------------------- settings
 
-    def test_settings_view_and_the_actions_it_names(self):
-        view = send("ui.settings", "view")["data"]
-        ids = [r["id"] for r in items(view)]
-        self.assertEqual(["ma", "ia", "collections", "browser", "open"], ids)
-        self.assertTrue(send("ui.settings", "setCollections", values={"collections": "https://archive.org/details/softwarelibrary_win95, bad!"})["ok"])
+    def test_settings_facets_and_the_calls_they_name(self):
+        facets = send("ui.facets", "get", target="settings.page")["data"]["facets"]
+        self.assertEqual(["ma", "ia", "collections", "browser", "open"], [f["id"] for f in facets])
+        self.assertEqual(["toggle", "toggle", "input", "status", "action"], [f["kind"] for f in facets])
+        self.assertEqual([], send("ui.facets", "get", target="quickmenu")["data"]["facets"])
+        self.assertTrue(send("ui.facets", "setCollections", value="https://archive.org/details/softwarelibrary_win95, bad!")["ok"])
         self.assertEqual(["softwarelibrary_win95"], plugin._state()["collections"])
-        self.assertTrue(send("ui.settings", "setCollections", values={"collections": ""})["ok"])
+        self.assertTrue(send("ui.facets", "setCollections", value="")["ok"])
         self.assertEqual(plugin.DEFAULT_COLLECTIONS, plugin._state()["collections"])
 
     def test_opening_the_site_asks_droidtops_browser_view_and_clearing_is_offered_after(self):
         answers[("web.session", "sign_in")] = {"signedIn": True}
-        reply = job("openSite", point="ui.settings")
+        reply = job("openSite", point="ui.facets")
         self.assertTrue(reply["ok"])
         self.assertEqual(("web.session", "sign_in", {"url": "https://www.myabandonware.com/"}), [c for c in calls if c[1] == "sign_in"][0])
         session["signedIn"] = True
-        self.assertIn("clear", [r["id"] for r in items(send("ui.settings", "view")["data"])])
+        self.assertIn("clear", [f["id"] for f in send("ui.facets", "get", target="settings.page")["data"]["facets"]])
 
     def test_unknown_things_are_error_replies(self):
         self.assertEqual("UNSUPPORTED", send("library.sources", "lookup")["error"]["code"])
@@ -293,7 +295,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual("gamegrab.abandonware", manifest["id"])
         self.assertEqual("python", manifest["kind"])
         self.assertFalse(manifest.get("requestsRoot"))
-        self.assertEqual({"library.sources", "ui.settings"}, set(p["point"] for p in manifest["provides"]))
+        self.assertEqual({"library.sources", "ui.facets"}, set(p["point"] for p in manifest["provides"]))
         permissions = dict((p["id"], p) for p in manifest["permissions"])
         self.assertEqual({"net.domains", "web.session", "library.folders.write"}, set(permissions))
         domains = permissions["net.domains"]["domains"]
