@@ -6,6 +6,9 @@
   two site switches, the Internet Archive collections, the browser check's state, Open MyAbandonware and, once
   passed, Forget the browser session. Each switch and the collections are saved as they are committed, from
   droidtop's `value`.
+- The manifest says `"contractVersion": 3`: it needs facets, so a droidtop built before them refuses this version
+  and keeps the one installed, rather than install a plugin whose settings it cannot draw (droidtop docs/plugin-api.md
+  7, "Contract 3").
 
 ## 0.3.2
 
