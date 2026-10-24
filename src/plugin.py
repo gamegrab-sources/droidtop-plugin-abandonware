@@ -312,23 +312,30 @@ def _ma_search(query, context_system):
         raise Challenge()
     if status != 200:
         raise HostError("FAILED", _http_error("MyAbandonware", status))
-    results = []
-    for card in parse_cards(body):
-        if not _wanted_platform(card["platforms"], context_system):
-            continue
-        first = card["platforms"].split(",")[0].strip() if card["platforms"] else ""
-        results.append(
-            {
-                "id": "ma:" + card["slug"],
-                "title": card["title"],
-                "subtitle": "MyAbandonware",
-                "columns": [c for c in (card["platforms"], card["year"]) if c],
-                "badges": [],
-                "platform": system_for_platform(first),
-                "ref": {"site": "ma", "slug": card["slug"]},
-            }
-        )
-    return results
+    return [_ma_row(card) for card in parse_cards(body) if _wanted_platform(card["platforms"], context_system)]
+
+
+def _ma_row(card):
+    first = card["platforms"].split(",")[0].strip() if card["platforms"] else ""
+    return {
+        "id": "ma:" + card["slug"],
+        "title": card["title"],
+        "subtitle": "MyAbandonware",
+        "columns": [c for c in (card["platforms"], card["year"]) if c],
+        "badges": [],
+        "platform": system_for_platform(first),
+        "ref": {"site": "ma", "slug": card["slug"]},
+    }
+
+
+def _ma_recent(context_system):
+    """The games MyAbandonware added last, newest first, as its /browse/recent/ page lists them."""
+    status, _final, _headers, body = _fetch(MA + "/browse/recent/")
+    if _is_challenge(body):
+        raise Challenge()
+    if status != 200:
+        raise HostError("FAILED", _http_error("MyAbandonware", status))
+    return [_ma_row(card) for card in parse_cards(body) if _wanted_platform(card["platforms"], context_system)]
 
 
 def _ma_game(slug):
@@ -487,6 +494,26 @@ def _search(args):
     if not results and failures:
         return _error("FAILED", failures[0])
     return _ok({"results": results})
+
+
+def _featured(args):
+    """MyAbandonware's newest additions (droidtop docs/plugin-api.md 1.8, Droidtop/tracker#612), for Get new games: on
+    droidtop's own page all of them, on a system's page the ones for it, and none for a system MyAbandonware has no
+    games for."""
+    system = str(args.get("platform") or "").strip().lower()
+    if not _state()["ma"]:
+        return _ok({"results": []})
+    if system and not (SYSTEM_PLATFORMS.get(system) or [k for k, v in PLATFORM_SYSTEMS.items() if v == system]):
+        return _ok({"results": []})
+    try:
+        limit = max(1, min(int(args.get("limit") or 20), 60))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        rows = _ma_recent(system)
+    except Challenge:
+        return _error("FAILED", CHALLENGE_TEXT)
+    return _ok({"results": rows[:limit]})
 
 
 def _detail(args):
@@ -728,6 +755,8 @@ def handle(call_json):
                 return _ok(_form())
             if op == "search":
                 return _search(args)
+            if op == "featured":
+                return _featured(args)
             if op == "detail":
                 return _detail(args)
         elif point == "ui.facets":

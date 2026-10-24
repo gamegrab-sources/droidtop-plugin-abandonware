@@ -166,6 +166,21 @@ class PluginTest(unittest.TestCase):
         # One request, no retry, nothing but the page asked for.
         self.assertEqual(1, len([c for c in calls if c[1] in ("request", "fetch")]))
 
+    # ---------------------------------------------------------------- featured
+
+    def test_featured_is_the_newest_additions_for_the_system_asked(self):
+        recent = "https://www.myabandonware.com/browse/recent/"
+        answers[("GET", recent)] = page(fixture("ma_recent.html"))
+        rows = send("library.sources", "featured", limit=10)["data"]["results"]
+        self.assertEqual(["The Museum of Broken Memories", "The Pilot, or: A Flight into Fantasy", "The Battle of Philip against the Forces of Creation"], [r["title"] for r in rows])
+        self.assertEqual(["Win", "2006"], rows[0]["columns"])
+        self.assertEqual(1, len(send("library.sources", "featured", limit=1)["data"]["results"]))
+        dos = send("library.sources", "featured", platform="dos")["data"]["results"]
+        self.assertEqual(["The Pilot, or: A Flight into Fantasy", "The Battle of Philip against the Forces of Creation"], [r["title"] for r in dos])
+        self.assertEqual([], send("library.sources", "featured", platform="snes")["data"]["results"], "a system MyAbandonware has no games for")
+        answers[("GET", recent)] = page(fixture("ma_challenge.html"))
+        self.assertIn("Open MyAbandonware", send("library.sources", "featured")["error"]["message"])
+
     def test_with_the_browser_session_the_request_goes_through_it(self):
         session["signedIn"] = True
         answers[("GET", SEARCH)] = page(fixture("ma_cards.html"))

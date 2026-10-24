@@ -9,6 +9,7 @@ Get games screens (`library.sources`: search, detail, acquire), and droidtop's d
 
 ## MyAbandonware
 
+- Get new games (`featured`): the newest additions from `/browse/recent/`, for the system droidtop is showing.
 - Search `/search/q/<words>`, game pages with a download per platform and version, and the download address
   `/download/<id>` (it redirects to a short-lived file address; the plugin sends the session cookie the game page set and
   the game page as referer, and asks once with HEAD for the file's name and size).

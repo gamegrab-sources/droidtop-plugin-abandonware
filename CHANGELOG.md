@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- `featured` (droidtop docs/plugin-api.md 1.8, Droidtop/tracker#612): MyAbandonware's newest additions, newest first,
+  from its `/browse/recent/` page, for droidtop's Get new games; on a system's page only the games for that system, and
+  none for a system MyAbandonware has no games for. A browser check is said as search says it.
+
 ## 0.4.1
 
 - The release of 0.4.0's facets and contract 3 changes. 0.4.0's two commits shared one declared version, so CI's version rule refused the second
