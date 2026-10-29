@@ -6,6 +6,8 @@ where you live is your call.
 
 It searches [MyAbandonware](https://www.myabandonware.com) and the Internet Archive's software library through droidtop's
 Get games screens (`library.sources`: search, detail, acquire), and droidtop's downloader fetches the file you pick.
+Where to search (both sites, MyAbandonware or the Internet Archive) is one of droidtop's search options for this source
+(`search.filter`), kept between searches.
 
 ## MyAbandonware
 
@@ -14,8 +16,9 @@ Get games screens (`library.sources`: search, detail, acquire), and droidtop's d
   `/download/<id>` (it redirects to a short-lived file address; the plugin sends the session cookie the game page set and
   the game page as referer, and asks once with HEAD for the file's name and size).
 - **The browser check.** The site puts its search behind a JavaScript and captcha check ("Cake Test"). This plugin does
-  not try to pass it, and says so in plain words when a request meets it. Settings > "Open MyAbandonware" opens the site
-  in droidtop's own browser view (`web.session`), where you pass it as in any browser; the plugin then asks through that
+  not try to pass it. A search, a game page or Get new games that meets it answers `BROWSER_CHECK_REQUIRED`, and
+  droidtop offers its own "Open the site" right there (Settings > "Open MyAbandonware" does the same). That opens the
+  site in droidtop's own browser view (`web.session`), where you pass it as in any browser; the plugin then asks through that
   session, and uses the same view for a download a plain request cannot get (`open_in_session`).
 - The site's robots.txt disallows `/search/*` and `/download/*` for crawlers. The plugin never crawls: it makes the request
   a person's own search or download press makes, one at a time.

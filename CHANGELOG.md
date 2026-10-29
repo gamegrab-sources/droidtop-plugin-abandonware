@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Search options instead of a search form (droidtop docs/plugin-api.md 1.10, `search.filter`, Droidtop/tracker#602):
+  "Where" is a search option droidtop keeps and sends with each search as `filters.site`; the `form` op is gone, and a
+  `values.site` from an older droidtop is still read.
+- The browser check is `BROWSER_CHECK_REQUIRED` from search, detail and featured, so droidtop offers its own "Open the
+  site" in place, instead of "Open MyAbandonware in this plugin's Settings" (a redirect). A job that meets it says to
+  open the game's page again, which then offers the check.
+
 ## 0.5.0
 
 - `featured` (droidtop docs/plugin-api.md 1.8, Droidtop/tracker#612): MyAbandonware's newest additions, newest first,

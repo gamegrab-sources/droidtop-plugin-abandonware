@@ -161,10 +161,22 @@ class PluginTest(unittest.TestCase):
     def test_the_browser_check_is_reported_in_plain_words_and_never_worked_around(self):
         answers[("GET", SEARCH)] = page(fixture("ma_challenge.html"))
         reply = send("library.sources", "search", query="pro race", values={"site": "ma"})
-        self.assertEqual("FAILED", reply["error"]["code"])
-        self.assertIn("Open MyAbandonware", reply["error"]["message"])
+        # droidtop's own "Open the site" answers BROWSER_CHECK_REQUIRED in place; the plugin sends no one to Settings.
+        self.assertEqual("BROWSER_CHECK_REQUIRED", reply["error"]["code"])
+        self.assertIn("browser check", reply["error"]["message"])
+        self.assertNotIn("Settings", reply["error"]["message"])
         # One request, no retry, nothing but the page asked for.
         self.assertEqual(1, len([c for c in calls if c[1] in ("request", "fetch")]))
+
+    def test_where_to_search_is_a_search_option_droidtop_keeps(self):
+        facets = send("ui.facets", "get", target="search.filter")["data"]["facets"]
+        self.assertEqual(["site"], [f["id"] for f in facets])
+        self.assertEqual(["all", "ma", "ia"], [o["value"] for o in facets[0]["options"]])
+        self.assertEqual("UNSUPPORTED", send("library.sources", "form")["error"]["code"], "the search form is gone")
+        # The kept option arrives as filters.site: only MyAbandonware is asked.
+        answers[("GET", SEARCH)] = page(fixture("ma_cards.html"))
+        send("library.sources", "search", query="pro race", filters={"site": "ma"})
+        self.assertFalse([c for c in calls if "archive.org" in str(c[2].get("url", ""))])
 
     # ---------------------------------------------------------------- featured
 
@@ -179,7 +191,7 @@ class PluginTest(unittest.TestCase):
         self.assertEqual(["The Pilot, or: A Flight into Fantasy", "The Battle of Philip against the Forces of Creation"], [r["title"] for r in dos])
         self.assertEqual([], send("library.sources", "featured", platform="snes")["data"]["results"], "a system MyAbandonware has no games for")
         answers[("GET", recent)] = page(fixture("ma_challenge.html"))
-        self.assertIn("Open MyAbandonware", send("library.sources", "featured")["error"]["message"])
+        self.assertEqual("BROWSER_CHECK_REQUIRED", send("library.sources", "featured")["error"]["code"])
 
     def test_with_the_browser_session_the_request_goes_through_it(self):
         session["signedIn"] = True
@@ -227,7 +239,7 @@ class PluginTest(unittest.TestCase):
     def test_detail_names_the_browser_check_too(self):
         answers[("GET", GAME)] = page(fixture("ma_challenge.html"))
         reply = send("library.sources", "detail", ref={"site": "ma", "slug": "prince-of-persia-pd"})
-        self.assertIn("Open MyAbandonware", reply["error"]["message"])
+        self.assertEqual("BROWSER_CHECK_REQUIRED", reply["error"]["code"])
 
     def test_a_bad_ref_is_an_error_reply(self):
         self.assertEqual("INVALID_ARGS", send("library.sources", "detail", ref={"site": "ma", "slug": "../x"})["error"]["code"])
@@ -253,7 +265,8 @@ class PluginTest(unittest.TestCase):
         answers[("GET", GAME)] = page(fixture("ma_game.html"))
         answers[("HEAD", FILE)] = page("<html>", url=GAME, headers={"content-type": "text/html"})
         reply = job("acquire", ref={"site": "ma", "slug": "prince-of-persia-pd"}, values={"file": "/download/m4og-prince-of-persia"})
-        self.assertIn("Open MyAbandonware", reply["error"])
+        # A job can only say it: the game's page, opened again, meets the check and droidtop offers to pass it.
+        self.assertIn("Open the game's page again", reply["error"])
         session["signedIn"] = True
         answers[("GET", GAME)] = page(fixture("ma_game.html"))  # fetched through the session now
         answers[("web.session", "open_in_session")] = {"captured": True, "download": {"url": "https://d2.xp.myabandonware.com/t/9/P.zip", "fileName": "P.zip", "session": "w-" + "0" * 8 + "-" + "0" * 4 + "-" + "0" * 4 + "-" + "0" * 4 + "-" + "0" * 12}}

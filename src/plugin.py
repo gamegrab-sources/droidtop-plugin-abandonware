@@ -12,8 +12,9 @@ Through the `library.sources` point (search, detail, acquire) it offers:
                        default, more in Settings), an item's files from its metadata
 
 MyAbandonware puts its search behind a "cake test" (a JavaScript and captcha browser check). This plugin does not try
-to pass it: when a request meets the check it says so, and Settings > "Open MyAbandonware" opens the site in droidtop's
-own browser view, where the person passes it as in any browser; the plugin then asks through that session (web.session
+to pass it: a search, a game page or Get new games that meets the check answers BROWSER_CHECK_REQUIRED, and droidtop
+offers its own "Open the site" right there (Settings > "Open MyAbandonware" does the same), in droidtop's own browser
+view, where the person passes it as in any browser; the plugin then asks through that session (web.session
 fetch). The same view is the fallback for a download the site will not hand to a plain request (open_in_session).
 
 What the plugin tells droidtop about a download besides the file: the system the game is for (`system`, droidtop's id
@@ -88,7 +89,7 @@ IA_SKIP = re.compile(r"(_meta\.xml|_files\.xml|_reviews\.xml|_archive\.torrent|_
 
 
 # droidtop's closed set of error codes (docs/plugin-api.md 1.3).
-ERROR_CODES = {"INVALID_ARGS", "UNSUPPORTED", "NOT_FOUND", "PERMISSION_DENIED", "RATE_LIMITED", "TIMEOUT", "PROVIDER_UNAVAILABLE", "PROVIDER_CRASHED", "CANCELLED", "FAILED"}
+ERROR_CODES = {"BROWSER_CHECK_REQUIRED", "INVALID_ARGS", "UNSUPPORTED", "NOT_FOUND", "PERMISSION_DENIED", "RATE_LIMITED", "TIMEOUT", "PROVIDER_UNAVAILABLE", "PROVIDER_CRASHED", "CANCELLED", "FAILED"}
 
 
 class HostError(Exception):
@@ -449,23 +450,10 @@ def _info(item_id, title, value=None, subtitle=None):
     return node
 
 
-CHALLENGE_TEXT = "MyAbandonware wants a browser check. Open MyAbandonware in this plugin's Settings once, then try again."
-
-
-def _form():
-    return _view(
-        "Search abandonware",
-        [
-            {"type": "text", "id": "query", "title": "Search", "value": ""},
-            {
-                "type": "choice",
-                "id": "site",
-                "title": "Where",
-                "options": [{"value": "all", "label": "MyAbandonware and the Internet Archive"}, {"value": "ma", "label": "MyAbandonware"}, {"value": "ia", "label": "Internet Archive"}],
-                "value": "all",
-            },
-        ],
-    )
+# A quick call that meets MyAbandonware's browser check says BROWSER_CHECK_REQUIRED: droidtop then offers its own "Open
+# the site" in place (docs/plugin-api.md 1.3), in the plugin's web session. A job can only say it in words.
+CHALLENGE_TEXT = "MyAbandonware showed a browser check instead of its pages."
+CHALLENGE_JOB_TEXT = "MyAbandonware showed a browser check. Open the game's page again to pass it, then get the game."
 
 
 def _search(args):
@@ -474,16 +462,19 @@ def _search(args):
     query = (args.get("query") or values.get("query") or "").strip()
     if not query:
         return _ok({"results": []})
-    site = values.get("site") or "all"
+    # Where to search is one of this source's search options (search.filter), kept by droidtop and sent as `filters`;
+    # an older droidtop's form sent it in `values`.
+    site = (args.get("filters") or {}).get("site") or values.get("site") or "all"
     system = ((context.get("system") or {}).get("id") or args.get("platform") or "").lower()
     state = _state()
     results = []
     failures = []
+    checked = False
     if state["ma"] and site in ("all", "ma"):
         try:
             results.extend(_ma_search(query, system))
         except Challenge:
-            failures.append(CHALLENGE_TEXT)
+            checked = True
         except HostError as error:
             failures.append(error.message)
     if state["ia"] and site in ("all", "ia"):
@@ -491,6 +482,8 @@ def _search(args):
             results.extend(_ia_search(query, state, system))
         except HostError as error:
             failures.append(error.message)
+    if not results and checked:
+        return _error("BROWSER_CHECK_REQUIRED", CHALLENGE_TEXT)
     if not results and failures:
         return _error("FAILED", failures[0])
     return _ok({"results": results})
@@ -512,7 +505,7 @@ def _featured(args):
     try:
         rows = _ma_recent(system)
     except Challenge:
-        return _error("FAILED", CHALLENGE_TEXT)
+        return _error("BROWSER_CHECK_REQUIRED", CHALLENGE_TEXT)
     return _ok({"results": rows[:limit]})
 
 
@@ -522,7 +515,7 @@ def _detail(args):
         try:
             game, _headers = _ma_game(ref.get("slug"))
         except Challenge:
-            return _error("FAILED", CHALLENGE_TEXT)
+            return _error("BROWSER_CHECK_REQUIRED", CHALLENGE_TEXT)
         rows = []
         if game["summary"]:
             rows.append(_info("about", "About", None, game["summary"][:480]))
@@ -579,6 +572,17 @@ def _detail(args):
 
 
 SETTINGS_TARGET = "settings.page"
+FILTER_TARGET = "search.filter"
+SITE_OPTIONS = [
+    {"value": "all", "label": "MyAbandonware and the Internet Archive"},
+    {"value": "ma", "label": "MyAbandonware"},
+    {"value": "ia", "label": "Internet Archive"},
+]
+
+
+def _filter_facets():
+    """This source's search options in droidtop's one search (search.filter): where to search."""
+    return {"facets": [{"id": "site", "kind": "choice", "v": 1, "targets": [FILTER_TARGET], "label": "Where", "options": SITE_OPTIONS, "value": "all"}]}
 
 
 def _facet(fid, kind, label, **fields):
@@ -648,7 +652,7 @@ def _acquire_ma(args):
     try:
         game, headers = _ma_game(slug)
     except Challenge:
-        return {"ok": False, "error": CHALLENGE_TEXT}
+        return {"ok": False, "error": CHALLENGE_JOB_TEXT}
     chosen = None
     system = ""
     for section in game["sections"]:
@@ -686,7 +690,7 @@ def _acquire_ma(args):
         if data.get("captured") and isinstance(data.get("download"), dict):
             return _done_ma(game, data["download"], system)
         return {"ok": False, "error": "That page started no download."}
-    return {"ok": False, "error": CHALLENGE_TEXT}
+    return {"ok": False, "error": CHALLENGE_JOB_TEXT}
 
 
 def _done_ma(game, download, system):
@@ -751,8 +755,6 @@ def handle(call_json):
     args = call.get("args") or {}
     try:
         if point == "library.sources":
-            if op == "form":
-                return _ok(_form())
             if op == "search":
                 return _search(args)
             if op == "featured":
@@ -761,7 +763,10 @@ def handle(call_json):
                 return _detail(args)
         elif point == "ui.facets":
             if op == "get":
-                return _ok(_settings_facets(_state()) if args.get("target") == SETTINGS_TARGET else {"facets": []})
+                target = args.get("target")
+                if target == SETTINGS_TARGET:
+                    return _ok(_settings_facets(_state()))
+                return _ok(_filter_facets() if target == FILTER_TARGET else {"facets": []})
             if op == "setSite":
                 return _set_site(args)
             if op == "setCollections":
