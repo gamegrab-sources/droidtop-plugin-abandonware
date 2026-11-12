@@ -150,6 +150,30 @@ class PluginTest(unittest.TestCase):
         self.assertIn("collection%3Asoftwarelibrary_msdos_games", query)
         self.assertIn("output=json", query)
 
+    def test_index_pages_each_collection_with_its_system(self):
+        scrape = plugin.IA_SCRAPE + "?"
+        first = {"items": [{"identifier": "msdos_Doom_1993", "title": "Doom", "year": "1993"}, {"identifier": "bad id!"}], "cursor": "abc"}
+        answers[("GET", scrape + "*")] = page(json.dumps(first))
+        reply = send("library.sources", "index", limit=500)["data"]
+        self.assertEqual(["ia:msdos_Doom_1993"], [r["id"] for r in reply["results"]])
+        self.assertEqual("dos", reply["results"][0]["platform"])
+        self.assertEqual({"site": "ia", "id": "msdos_Doom_1993"}, reply["results"][0]["ref"])
+        self.assertEqual("0|abc", reply["next"])
+        url = [c for c in calls if c[0] == "net" and c[2]["url"].startswith(scrape)][-1][2]["url"]
+        self.assertIn("collection%3Asoftwarelibrary_msdos_games", url)
+        # The first collection ends: the next starts, with its own system.
+        answers[("GET", scrape + "*")] = page(json.dumps({"items": [{"identifier": "win3_Tetris", "title": "Tetris"}]}))
+        reply = send("library.sources", "index", limit=500, cursor="0|abc")["data"]
+        self.assertEqual("1|", reply["next"])
+        url = [c for c in calls if c[0] == "net" and c[2]["url"].startswith(scrape)][-1][2]["url"]
+        self.assertIn("cursor=abc", url)
+        reply = send("library.sources", "index", limit=500, cursor="1|")["data"]
+        self.assertEqual("windows3x", reply["results"][0]["platform"])
+        self.assertNotIn("next", reply, "the last collection's last page ends the list")
+        url = [c for c in calls if c[0] == "net" and c[2]["url"].startswith(scrape)][-1][2]["url"]
+        self.assertIn("collection%3Asoftwarelibrary_win3", url)
+        self.assertNotIn("cursor=", url)
+
     def test_a_system_filters_the_cards_to_its_own_platform(self):
         answers[("GET", SEARCH)] = page(fixture("ma_cards.html"))
         reply = send("library.sources", "search", query="pro race", values={"site": "ma"}, context={"system": {"id": "dos", "name": "DOS"}})

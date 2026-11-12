@@ -33,6 +33,8 @@ PLUGIN_ID = "gamegrab.abandonware"
 
 MA = "https://www.myabandonware.com"
 IA_SEARCH = "https://archive.org/advancedsearch.php"
+# The scrape API pages a whole collection with a cursor (no deep-paging limit), for the bulk index.
+IA_SCRAPE = "https://archive.org/services/search/v1/scrape"
 IA_META = "https://archive.org/metadata/"
 IA_DOWNLOAD = "https://archive.org/download/"
 LOGIN_URL = MA + "/"
@@ -405,6 +407,76 @@ def _ia_search(query, state, context_system):
     return results
 
 
+def _ia_index(args):
+    """This source's whole Internet Archive list, a page at a time (droidtop docs/plugin-api.md `index`, Droidtop/tracker#937):
+    droidtop keeps it in this source's own index so typing finds these games with no request. Each chosen collection in
+    turn, through the scrape API; `next` is `<collection number>|<the archive's cursor>`. MyAbandonware is not listed
+    in bulk: its games enter the index from searches and featured lists."""
+    state = _state()
+    if not state["ia"]:
+        return _ok({"results": []})
+    collections = state["collections"]
+    try:
+        limit = max(100, min(int(args.get("limit") or 500), 5000))
+    except (TypeError, ValueError):
+        limit = 500
+    number, ia_cursor = 0, ""
+    cursor = str(args.get("cursor") or "")
+    if cursor:
+        head, _sep, ia_cursor = cursor.partition("|")
+        try:
+            number = int(head)
+        except ValueError:
+            raise HostError("INVALID_ARGS", "Unreadable cursor")
+    if number >= len(collections):
+        return _ok({"results": []})
+    collection = collections[number]
+    system = next((s for s, names in SYSTEM_COLLECTIONS.items() if collection in names), "")
+    params = [
+        ("q", "collection:%s AND mediatype:software" % collection),
+        ("fields", "identifier,title,year"),
+        ("count", str(limit)),
+    ]
+    if ia_cursor:
+        params.append(("cursor", ia_cursor))
+    status, _final, _headers, body = _fetch(IA_SCRAPE + "?" + urllib.parse.urlencode(params), session=False)
+    if status != 200:
+        raise HostError("FAILED", _http_error("The Internet Archive", status))
+    try:
+        page = json.loads(body)
+        items = page.get("items") or []
+    except (ValueError, AttributeError):
+        raise HostError("FAILED", UNREADABLE_IA)
+    results = []
+    for doc in items:
+        identifier = doc.get("identifier") if isinstance(doc, dict) else None
+        if not isinstance(identifier, str) or not IA_ID.match(identifier):
+            continue
+        year = str(doc.get("year") or "")
+        results.append(
+            {
+                "id": "ia:" + identifier,
+                "title": str(doc.get("title") or identifier)[:200],
+                "subtitle": "Internet Archive",
+                "columns": [year] if year else [],
+                "badges": [],
+                "platform": system,
+                "ref": {"site": "ia", "id": identifier},
+            }
+        )
+    following = page.get("cursor")
+    if isinstance(following, str) and following:
+        nxt = "%d|%s" % (number, following)
+    elif number + 1 < len(collections):
+        nxt = "%d|" % (number + 1)
+    else:
+        nxt = None
+    reply = {"results": results}
+    if nxt:
+        reply["next"] = nxt
+    return _ok(reply)
+
+
 def _ia_item(identifier):
     if not IA_ID.match(identifier or ""):
         raise HostError("INVALID_ARGS", "Missing item")
@@ -761,6 +833,8 @@ def handle(call_json):
                 return _featured(args)
             if op == "detail":
                 return _detail(args)
+            if op == "index":
+                return _ia_index(args)
         elif point == "ui.facets":
             if op == "get":
                 target = args.get("target")

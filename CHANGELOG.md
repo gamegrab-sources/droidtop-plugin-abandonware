@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- `index` (droidtop docs/plugin-api.md, Droidtop/tracker#937) and `"bulkIndex": true`: the chosen Internet Archive
+  collections, page by page through the archive's scrape API, so droidtop keeps this source's own index and typing
+  finds these games with no request. Each entry is the same result a search gives, with the collection's system as
+  its platform. MyAbandonware has no whole list to read; its games join the index from searches and featured lists.
+  Nothing is listed while the Internet Archive switch is off.
+
 ## 0.6.0
 
 - Search options instead of a search form (droidtop docs/plugin-api.md 1.10, `search.filter`, Droidtop/tracker#602):
