@@ -646,7 +646,7 @@ def _detail(args):
 SETTINGS_TARGET = "settings.page"
 FILTER_TARGET = "search.filter"
 SITE_OPTIONS = [
-    {"value": "all", "label": "MyAbandonware and the Internet Archive"},
+    {"value": "all", "label": "Both"},
     {"value": "ma", "label": "MyAbandonware"},
     {"value": "ia", "label": "Internet Archive"},
 ]

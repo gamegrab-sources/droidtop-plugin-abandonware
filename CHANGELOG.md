@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- The "Where" search option's first choice reads "Both", not "MyAbandonware and the Internet Archive": droidtop
+  cut the long name at two lines in its value column (rig, Droidtop/tracker#939).
+
 ## 0.7.0
 
 - `index` (droidtop docs/plugin-api.md, Droidtop/tracker#937) and `"bulkIndex": true`: the chosen Internet Archive
